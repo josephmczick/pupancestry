@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PupPro — Dog Breed Identifier (Breed‑Only)</title>
+<meta name="description" content="Upload your dog's photos to identify likely breed(s). Outputs are restricted to dog breeds only, on-device via TensorFlow.js MobileNet." />
+<style>
+  :root{
+    --bg:#0b0d10;--card:#12161c;--muted:#a6b0bf;--text:#e8eef8;--accent:#6ba8ff;--accent-2:#7df0c1;--border:#1f2733;--shadow:0 10px 30px rgba(0,0,0,.35);
+    --warn:#f6d365;--err:#ffb4b4;--good:#7df0c1
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+       background:radial-gradient(1200px 800px at 20% 0%,#111827,#0b0d10);color:var(--text);line-height:1.5}
+  .site-header{max-width:1100px;margin:32px auto 16px;padding:0 16px}
+  .brand{display:flex;align-items:center;gap:10px}.logo{font-size:28px}
+  h1{margin:0;font-size:28px;letter-spacing:.3px}
+  .tagline{color:var(--muted);margin:8px 0 0 38px}
+  main{max-width:1100px;margin:0 auto;padding:16px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:20px}
+  .uploader{margin-bottom:14px}
+  .dropzone{border:1.5px dashed #2e3746;border-radius:14px;padding:28px;text-align:center;background:#0f141b;outline:none;transition:border-color .2s,background .2s,box-shadow .2s}
+  .dropzone.dragging{border-color:var(--accent);background:#101725;box-shadow:0 0 0 3px rgba(107,168,255,.12) inset}
+  .dropzone:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px rgba(107,168,255,.2)}
+  .dz-content{display:grid;justify-items:center;gap:8px}.dz-icon{font-size:34px}.hint{color:var(--muted);font-size:14px}
+  .controls{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;align-items:center}
+  .btn{background:#19202a;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 14px;cursor:pointer;transition:transform .05s,background .2s,border-color .2s,opacity .2s}
+  .btn:hover{background:#1b2430}.btn:active{transform:translateY(1px)}.btn[disabled]{opacity:.5;cursor:not-allowed}
+  .btn.primary{background:linear-gradient(135deg,#1c2634,#142033);border-color:#2e3b4e}
+  .status{margin-top:12px;color:var(--muted);font-size:14px;min-height:22px}
+  .status .bad{color:var(--err)} .status .ok{color:var(--good)} .status .warn{color:var(--warn)}
+  .engine{font-size:13px;margin-top:6px}
+  .progress{height:8px;background:#131922;border:1px solid var(--border);border-radius:999px;overflow:hidden;margin-top:10px}
+  .progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%;transition:width .3s ease}
+  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:16px}
+  .thumb{background:#0e141c;border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative}
+  .thumb img{width:100%;height:140px;object-fit:cover;image-orientation:from-image;display:block}
+  .thumb .meta{padding:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .thumb .remove{border:none;background:transparent;color:#8ea3bd;cursor:pointer;font-size:12px}
+  .thumb .remove:hover{color:#c0cfe5}
+  .results{margin-top:18px}
+  .summary{font-size:16px;margin-bottom:8px}
+  .dogness{font-size:13px;color:var(--muted);margin:4px 0 12px}
+  .bars{display:grid;gap:10px}
+  .bar{background:#0f1620;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .bar-inner{height:40px;display:flex;align-items:center;padding:0 12px;gap:10px}
+  .bar-fill{height:40px;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%;transition:width .5s}
+  .bar-label{position:absolute;font-weight:600}
+  .bar-row{position:relative;display:grid;grid-template-columns:1fr}
+  .bar-score{margin-left:auto;color:var(--muted)}
+  .details summary{cursor:pointer;margin:12px 0 8px;color:#cfe2ff}
+  .per-image{display:grid;gap:14px}
+  .cardx{background:#0f141b;border:1px solid var(--border);border-radius:12px;padding:12px}
+  .cardx h3{margin:0 0 8px 0;font-size:15px}
+  .cardx table{width:100%;border-collapse:collapse}
+  .cardx th,.cardx td{padding:6px 8px;border-bottom:1px solid #1b2431;text-align:left;font-size:14px}
+  .cardx tr:last-child td{border-bottom:none}
+  .disclaimer{margin-top:16px;font-size:13px;color:var(--muted)}
+  .site-footer{max-width:1100px;margin:20px auto 40px;padding:0 16px;color:var(--muted)}
+  noscript{display:block;margin:18px 0;color:#ffdf80}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="brand"><span class="logo">🐾</span><h1>PupPro</h1></div>
+  <p class="tagline">Find your dog's breed (or mix) with AI — right in your browser. <em>Breed‑only outputs.</em></p>
+</header>
+
+<main>
+  <section class="uploader card" aria-label="Dog photo uploader">
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop images here or use the Upload button">
+      <div class="dz-content">
+        <div class="dz-icon">📷</div>
+        <h2 style="margin:8px 0 0;">Drop photos here</h2>
+        <p style="margin:8px 0;">or</p>
+        <div class="controls" style="margin-top:0">
+          <button id="browseBtn" class="btn" type="button" aria-label="Upload photos">Upload photos</button>
+          <input id="fileInput" type="file" accept="image/*" multiple aria-label="Choose dog photos" hidden />
+        </div>
+        <p class="hint">Tip: Add 2–5 clear photos (face &amp; full body) for best results.</p>
+      </div>
+    </div>
+
+    <div id="thumbs" class="thumbs" aria-live="polite" aria-relevant="additions text"></div>
+
+    <div class="controls">
+      <button id="analyzeBtn" class="btn primary" type="button" disabled>Analyze Photos</button>
+      <button id="clearBtn"   class="btn" type="button" disabled>Clear</button>
+    </div>
+
+    <div id="status" class="status" role="status" aria-live="polite">Loading MobileNet…</div>
+    <div id="engine" class="engine"></div>
+    <div id="progress" class="progress" aria-hidden="true"><div id="progressBar" class="progress-bar" style="width:0%"></div></div>
+    <noscript>This site requires JavaScript for on‑device AI. Please enable JavaScript.</noscript>
+  </section>
+
+  <section id="results" class="results card" hidden aria-label="Breed results">
+    <h2>Likely Breed(s)</h2>
+    <div id="summary" class="summary"></div>
+    <div id="dogness" class="dogness"></div>
+    <div id="bars" class="bars" aria-live="polite"></div>
+    <details class="details"><summary>Per‑photo details</summary><div id="perImage" class="per-image"></div></details>
+    <div class="disclaimer"><strong>Note:</strong> Results are estimated from visual features. Mixed‑breed dogs can resemble multiple breeds. For official identification, consult your veterinarian or consider a DNA test.</div>
+  </section>
+</main>
+
+<footer class="site-footer"><p>Everything runs <strong>on your device</strong> with TensorFlow.js MobileNet. Outputs are restricted to dog breeds only.</p></footer>
+
+<script type="module">
+/* ======================================================
+   Breed‑only MobileNet (on‑device)
+   ====================================================== */
+const TFJS_CDNS = [
+  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
+  'https://unpkg.com/@tensorflow/tfjs@4.22.0/dist/tf.min.js'
+];
+const MOBILENET_CDNS = [
+  'https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js',
+  'https://unpkg.com/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js'
+];
+
+// visible engine text
+const ENGINE_LABEL = 'Engine: TensorFlow.js MobileNet · Breed‑only (ImageNet dog classes only)';
+
+let tf=null, mobilenet=null, tfClassifier=null;
+
+const state = { modelReady:false, images:[], perImageResults:{}, aggregate:new Map(), processing:false, dognessSum:0 };
+const $ = (id)=>document.getElementById(id);
+const els = {
+  dropzone:$('dropzone'), browseBtn:$('browseBtn'), fileInput:$('fileInput'),
+  thumbs:$('thumbs'), analyzeBtn:$('analyzeBtn'), clearBtn:$('clearBtn'),
+  status:$('status'), engine:$('engine'),
+  results:$('results'), summary:$('summary'), bars:$('bars'), perImage:$('perImage'),
+  dogness:$('dogness'),
+  progress:$('progress'), progressBar:$('progressBar')
+};
+
+function setStatus(msg, cls){ els.status.innerHTML = cls ? `<span class="${cls}">${msg}</span>` : msg; }
+function setEngineText(){ els.engine.textContent = ENGINE_LABEL; }
+function setProgress(p){ const v=Math.max(0,Math.min(100,p|0)); els.progressBar.style.width=v+'%'; els.progress.setAttribute('aria-hidden', v===0?'true':'false'); }
+function enableControls(){ els.analyzeBtn.disabled = (state.images.length===0) || state.processing || !state.modelReady; els.clearBtn.disabled = (state.images.length===0) && !state.processing; }
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function pct(x,dp=0){ return `${(x*100).toFixed(dp)}%`; }
+function titleCase(s){ return s.replace(/\w\S*/g, w => w[0].toUpperCase()+w.slice(1).toLowerCase()); }
+function isImage(f){ return f && ((f.type && f.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif|bmp|heic|heif|tif?f)$/i.test((f.name||'').toLowerCase())); }
+
+/* ---------- Breed label filtering ----------
+
+We keep predictions only if the label clearly denotes a dog *breed*.
+We exclude wild canids and any non-breed object.
+This is resilient to exact punctuation/casing in ImageNet labels.
+*/
+const BREED_INCLUDE_PATTERNS = [
+  /terrier/, /spaniel/, /retriever/, /hound/, /poodle/, /corgi/,
+  /shepherd/, /mastiff/, /pinscher/, /schnauzer/, /bulldog/, /dane/,
+  /boxer/, /rottweiler/, /pyrenees/, /husky/, /malamute/,
+  /chihuahua/, /papillon/, /pomeranian/, /samoyed/, /dalmatian/,
+  /sheepdog/, /collie/, /kelpie/, /komondor/, /kuvasz/, /vizsla/,
+  /weimaraner/, /whippet/, /greyhound/, /basenji/, /affenpinscher/,
+  /lhasa/, /pointer/, /setter/, /springer/, /clumber/, /brittany/,
+  /keeshond/, /chow/, /newfoundland/, /leonberg/, /bouvier/,
+  /groenendael/, /malinois/, /briard/, /schipperke/,
+  /entlebucher/, /appenzeller/, /brabancon/, /pug/,
+  /ibizan/, /elkhound/, /otterhound/, /saluki/, /deerhound/,
+  /foxhound/, /coonhound/, /bloodhound/, /beagle/,
+  /shetland/, /bernese/, /swiss mountain dog/,
+  /cardigan/, /pembroke/, /yorkshire/, /norfolk/, /norwich/,
+  /bedlington/, /lakeland/, /sealyham/, /dandie dinmont/,
+  /scottish/, /scotch/, /tibetan/
+];
+// Explicitly exclude wild canids even if "dog" appears
+const BREED_EXCLUDE_PATTERNS = [
+  /dingo/, /dhole/, /african hunting dog/, /lycaon pictus/,
+  /coyote/, /jackal/, /\bfox\b(?!hound)/, /\bwolf\b/
+];
+
+const BREED_ALIASES = new Map([
+  ['german shepherd, german shepherd dog, german police dog, alsatian','German Shepherd'],
+  ['doberman, doberman pinscher','Doberman Pinscher'],
+  ['saint bernard, st bernard','Saint Bernard'],
+  ['eskimo dog, husky','Husky (Eskimo Dog)'],
+  ['old english sheepdog, bobtail','Old English Sheepdog'],
+  ['shetland sheepdog, shetland sheep dog, shetland','Shetland Sheepdog'],
+  ['brittany spaniel','Brittany'],
+  ['clumber, clumber spaniel','Clumber Spaniel'],
+  ['english springer, english springer spaniel','English Springer Spaniel'],
+  ['cocker spaniel, english cocker spaniel, cocker','English Cocker Spaniel'],
+  ['lhasa, lhasa apso','Lhasa Apso'],
+  ['staffordshire bullterrier, staffordshire bull terrier','Staffordshire Bull Terrier'],
+  ['american staffordshire terrier, staffordshire terrier, american pit bull terrier, pit bull terrier','American Staffordshire Terrier'],
+  ['affenpinscher, monkey pinscher, monkey dog','Affenpinscher'],
+  ['bouvier des flandres, bouviers des flandres','Bouvier des Flandres'],
+  ['bull mastiff','Bullmastiff'],
+  ['great dane','Great Dane'],
+  ['bernese mountain dog','Bernese Mountain Dog'],
+  ['greater swiss mountain dog','Greater Swiss Mountain Dog'],
+  ['entlebucher','Entlebucher Mountain Dog'],
+  ['brabancon griffon','Brussels Griffon'],
+  ['mexican hairless','Mexican Hairless (Xoloitzcuintli)'],
+  ['pug, pug-dog','Pug'],
+  ['dalmatian, coach dog, carriage dog','Dalmatian']
+]);
+
+function isDogBreedLabel(label){
+  const l = String(label||'').toLowerCase();
+  if (BREED_EXCLUDE_PATTERNS.some(r=>r.test(l))) return false;
+  return BREED_INCLUDE_PATTERNS.some(r=>r.test(l));
+}
+
+function canonicalBreed(label){
+  const raw = String(label||'').toLowerCase().trim().replace(/_/g,' ');
+  if (BREED_ALIASES.has(raw)) return BREED_ALIASES.get(raw);
+  const first = raw.split(',')[0].trim().replace(/-/g,' ').replace(/\s+/g,' ');
+  return titleCase(first);
+}
+
+/* ---------- File helpers & UI wiring ---------- */
+const readAsDataURL = (file) => new Promise((res,rej)=>{ const fr=new FileReader(); fr.onerror=()=>rej(new Error('Failed to read file.')); fr.onload=()=>res(fr.result); fr.readAsDataURL(file); });
+const loadImageEl = (src) => new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=()=>rej(new Error('Image load error')); img.src=src; });
+function imageToCanvas(img) {
+  const c = document.createElement('canvas');
+  const w = img.naturalWidth ?? img.width, h = img.naturalHeight ?? img.height;
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  return c;
+}
+
+els.browseBtn.addEventListener('click', ()=>els.fileInput.click());
+els.fileInput.addEventListener('change', e=>addFiles(e.target.files));
+['dragenter','dragover'].forEach(ev => els.dropzone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); els.dropzone.classList.add('dragging'); }));
+['dragleave','drop'].forEach(ev => els.dropzone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); els.dropzone.classList.remove('dragging'); }));
+els.dropzone.addEventListener('drop', (e)=>{ if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
+els.dropzone.addEventListener('keydown', (e)=>{ if (e.key==='Enter' || e.key===' ') els.fileInput.click(); });
+els.clearBtn.addEventListener('click', clearAll);
+els.analyzeBtn.addEventListener('click', analyze);
+
+async function addFiles(list) {
+  const files = Array.from(list||[]).filter(isImage);
+  if (!files.length) { setStatus('No images detected. Please choose JPG/PNG/WEBP images.','bad'); return; }
+  for (const file of files.slice(0,12)) {
+    const id = uid(); const url = URL.createObjectURL(file);
+    const item = { id, file, url, imgEl:null };
+    state.images.push(item); renderThumb(item);
+    try {
+      if ('createImageBitmap' in window) item.imgEl = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      else { const dataUrl = await readAsDataURL(file); item.imgEl = await loadImageEl(dataUrl); }
+    } catch { setStatus('One of the images failed to load.','bad'); }
+  }
+  setStatus(`${state.images.length} photo${state.images.length===1?'':'s'} ready.`); enableControls();
+}
+
+function renderThumb(item) {
+  const div = document.createElement('div'); div.className='thumb'; div.id=`thumb-${item.id}`;
+  div.innerHTML = `
+    <img src="${item.url}" alt="Dog photo preview"/>
+    <div class="meta">
+      <span class="size">${(item.file.size/1024/1024).toFixed(2)} MB</span>
+      <button class="remove" aria-label="Remove photo" type="button">Remove</button>
+    </div>`;
+  div.querySelector('.remove').addEventListener('click', () => {
+    const i = state.images.findIndex(x=>x.id===item.id);
+    if (i!==-1) { try { if (state.images[i].imgEl?.close) state.images[i].imgEl.close(); } catch {}
+      URL.revokeObjectURL(state.images[i].url); state.images.splice(i,1); div.remove(); enableControls(); setStatus(`${state.images.length} photo${state.images.length===1?'':'s'} ready.`); }
+  });
+  els.thumbs.appendChild(div);
+}
+
+function clearAll() {
+  state.images.forEach(({ url, imgEl }) => { URL.revokeObjectURL(url); try { if (imgEl && typeof imgEl.close === 'function') imgEl.close(); } catch {} });
+  state.images = []; state.perImageResults = {}; state.aggregate = new Map(); state.dognessSum=0;
+  setProgress(0); els.thumbs.innerHTML=''; els.results.hidden=true; els.dogness.textContent='';
+  setStatus(state.modelReady ? 'MobileNet ready. Add photos to begin.' : 'Loading MobileNet…'); enableControls();
+}
+
+/* ---------- Simple TTA: add a horizontal flip ---------- */
+function flipCanvas(src) {
+  const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+  const ctx = c.getContext('2d'); ctx.translate(c.width, 0); ctx.scale(-1, 1); ctx.drawImage(src, 0, 0);
+  return c;
+}
+async function buildVariants(baseCanvas) {
+  return [baseCanvas, flipCanvas(baseCanvas)];
+}
+
+/* ---------- Breed‑only classification ---------- */
+async function classifyVariant(canvas) {
+  // Ask for all classes once; then filter to breeds only
+  const outs = await tfClassifier.classify(canvas, 1000);
+  const allowed = outs.filter(o => isDogBreedLabel(o.className));
+  const sumAllowed = allowed.reduce((s,o)=>s + (o.probability||0), 0);
+  const preds = (sumAllowed > 0)
+    ? allowed.map(o => ({ raw:o.className, label: canonicalBreed(o.className), score: o.probability / sumAllowed }))
+    : [];
+  return { preds: preds.slice(0, 25), dogness: sumAllowed };
+}
+
+async function classifyItem(item, topK=5) {
+  if (!item?.imgEl) throw new Error('Image not ready');
+  const base = imageToCanvas(item.imgEl);
+  const variants = await buildVariants(base);
+
+  const agg = new Map(); // label -> weighted score
+  let dognessTotal = 0;
+
+  for (const v of variants) {
+    const { preds, dogness } = await classifyVariant(v);
+    dognessTotal += dogness;
+    const weight = dogness; // weight this variant by how much "dog signal" it has
+    preds.forEach(p => agg.set(p.label, (agg.get(p.label)||0) + p.score * weight));
+  }
+
+  const totalWeight = dognessTotal || 1e-9;
+  const averaged = Array.from(agg.entries())
+                        .map(([label,score])=>({label, score: score / totalWeight}))
+                        .sort((a,b)=>b.score-a.score)
+                        .slice(0, topK);
+
+  const dognessAvg = dognessTotal / variants.length; // 0..1 (sum of breed probs)
+  return { preds: averaged, dogness: dognessAvg };
+}
+
+/* ---------- Rendering ---------- */
+function mixedBreedHint(top) {
+  if (!top || top.length < 2) return null;
+  const [a,b] = top;
+  if (a.score < 0.65 || (a.score - b.score) < 0.15) return `Your dog may be a mixed breed with features of ${a.label}${b ? ' and ' + b.label : ''}.`;
+  return null;
+}
+
+function renderBars(top) {
+  els.bars.innerHTML = '';
+  top.forEach((p) => {
+    const row = document.createElement('div'); row.className='bar-row';
+    const bar = document.createElement('div'); bar.className='bar';
+    const fill = document.createElement('div'); fill.className='bar-fill'; fill.style.width = Math.round(p.score*100) + '%';
+    const inner = document.createElement('div'); inner.className='bar-inner';
+    const label = document.createElement('div'); label.className='bar-label'; label.textContent = p.label;
+    const score = document.createElement('div'); score.className='bar-score'; score.textContent = pct(p.score);
+    bar.appendChild(fill); inner.appendChild(label); inner.appendChild(score); bar.appendChild(inner); row.appendChild(bar); els.bars.appendChild(row);
+  });
+}
+
+function renderResults(top, avgDogness) {
+  let summaryText = top.length ? `Top pick: ${top[0].label} (${pct(top[0].score)} among dog breeds).` : 'No confident breed prediction — try clearer photos.';
+  const mix = mixedBreedHint(top); if (mix) summaryText += ' ' + mix;
+
+  const DOGNESS_LOW = 0.20;
+  if (avgDogness < DOGNESS_LOW) {
+    summaryText = 'We’re not confident these photos contain a clear dog. Please try a sharper photo (face & full body).';
+  }
+
+  els.summary.textContent = summaryText;
+  els.dogness.textContent = `Confidence there’s a dog in these photo(s): ${pct(avgDogness,1)}.`;
+  renderBars(top);
+}
+
+function renderPerImage() {
+  els.perImage.innerHTML = '';
+  const entries = state.images.map((item, idx) => ({ item, idx, res: state.perImageResults[item.id] }));
+  entries.forEach(({ item, idx, res }) => {
+    const card = document.createElement('div'); card.className='cardx';
+    const title = document.createElement('h3'); title.textContent = `Photo ${idx + 1}`; card.appendChild(title);
+
+    if (!res || !res.preds?.length) {
+      const p = document.createElement('p'); p.textContent = 'No breed signal detected in this photo.'; card.appendChild(p);
+    } else {
+      const table = document.createElement('table'); const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Breed</th><th>Share</th></tr>'; table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      res.preds.forEach(p => {
+        const tr=document.createElement('tr');
+        const tdL=document.createElement('td'); tdL.textContent=p.label;
+        const tdS=document.createElement('td'); tdS.textContent=pct(p.score);
+        tr.appendChild(tdL); tr.appendChild(tdS); tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); card.appendChild(table);
+
+      const note = document.createElement('p'); note.style.marginTop='8px';
+      note.style.color = res.dogness < 0.20 ? 'var(--warn)' : 'var(--muted)';
+      note.textContent = `Dogness: ${pct(res.dogness,1)}. ${res.dogness < 0.20 ? 'Low confidence for this image.' : 'Higher indicates clearer dog features.'}`;
+      card.appendChild(note);
+    }
+    els.perImage.appendChild(card);
+  });
+}
+
+/* ---------- Analyze flow ---------- */
+async function analyze() {
+  if (state.images.length===0 || state.processing) return;
+  if (!state.modelReady) { setStatus('MobileNet is still loading…','warn'); return; }
+
+  state.processing = true; enableControls();
+  els.results.hidden = true; els.summary.textContent = ''; els.bars.innerHTML = ''; els.perImage.innerHTML = ''; els.dogness.textContent='';
+  state.perImageResults = {}; state.aggregate = new Map(); state.dognessSum=0;
+  setProgress(5); setStatus('Analyzing photos…');
+
+  try {
+    for (let i = 0; i < state.images.length; i++) {
+      const item = state.images[i];
+      setStatus(`Analyzing photo ${i+1} of ${state.images.length}…`);
+      const per = await classifyItem(item, 5);
+      state.perImageResults[item.id] = per;
+
+      // weight breed shares by dogness so low-signal photos contribute less
+      per.preds.forEach(({ label, score }) => state.aggregate.set(label, (state.aggregate.get(label)||0) + score * per.dogness));
+      state.dognessSum += per.dogness;
+
+      setProgress(Math.min(95, Math.round(((i+1)/state.images.length)*90) + 5));
+    }
+
+    const agg = Array.from(state.aggregate.entries());
+    const total = agg.reduce((s,[,v])=>s+v,0) || 1;
+    const normalized = agg.map(([label,score])=>({label,score:score/total})).sort((a,b)=>b.score-a.score);
+    const avgDogness = state.dognessSum / Math.max(1, state.images.length);
+
+    renderResults(normalized.slice(0,5), avgDogness);
+    renderPerImage();
+    setProgress(100); setStatus('Done.','ok'); els.results.hidden=false;
+  } catch (err) {
+    console.error(err);
+    setStatus(`Something went wrong while analyzing: ${err?.message || err}. Try different photos.`,'bad');
+  } finally {
+    setTimeout(()=>setProgress(0),600);
+    state.processing = false; enableControls();
+  }
+}
+
+/* ---------- Loader helpers ---------- */
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.onload=()=>res(); s.onerror=()=>rej(new Error('Failed to load '+src)); document.head.appendChild(s); }); }
+async function loadAny(urls){ let last; for (const u of urls){ try{ await loadScript(u); return true; }catch(e){ last=e; } } throw last || new Error('All sources failed'); }
+
+/* ---------- Init MobileNet (breed‑only wrapper) ---------- */
+async function initMobileNetOnly(){
+  try{
+    setStatus('Loading TensorFlow.js…'); setProgress(10);
+    await loadAny(TFJS_CDNS);
+    // @ts-ignore
+    tf = window.tf;
+    await tf.ready();
+
+    setStatus('Loading MobileNet v2 (1.0/224)…'); setProgress(35);
+    await loadAny(MOBILENET_CDNS);
+    // @ts-ignore
+    mobilenet = window.mobilenet;
+    tfClassifier = await mobilenet.load({ version: 2, alpha: 1.0 }); // v2_1.0_224
+
+    state.modelReady = true; setEngineText();
+    setStatus('MobileNet ready. Add photos to begin.','ok'); setProgress(85);
+  } catch (e) {
+    console.error(e);
+    setStatus(`Could not load MobileNet: ${e?.message || e}. Please allow cdn.jsdelivr.net or unpkg.com.`, 'bad');
+  } finally {
+    setTimeout(()=>setProgress(0),600);
+    enableControls();
+  }
+}
+
+// Init
+enableControls();
+initMobileNetOnly();
+</script>
+</body>
+</html>
