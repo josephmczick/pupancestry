@@ -1,5 +1,0 @@
-{
-  "name": "Pup Ancestry AI",
-  "description": "State-of-the-art dog breed identifier using Gemini 2.5 Flash Vision.",
-  "requestFramePermissions": []
-}
